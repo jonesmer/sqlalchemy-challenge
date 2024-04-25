@@ -27,7 +27,14 @@ Station = Base.classes.station
 # Create our session (link) from Python to the DB
 session = Session(engine)
 
+# take a date string (with or without "-") and make it a date
+def str_to_date(input):
 
+    # check for "-"
+    new_str = input.replace("-","")
+    final_date = dt.date(int(new_str[0:4]),int(new_str[4:6]),int(new_str[6:]))
+    
+    return final_date
 #################################################
 # Flask Setup
 #################################################
@@ -47,8 +54,8 @@ def home():
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
         f"/api/v1.0/&lt;start&gt;<br/>"
-        f"/api/v1.0/&lt;start&gt;/&lt;end&gt;<br/>"
-        f"Please input dates as YYYYMMDD. Dates should be between 20100101 and 20170823."
+        f"/api/v1.0/&lt;start&gt;/&lt;end&gt;<br/><br/>"
+        f"Please input dates as YYYYMMDD.<br/>&lt;start&gt; and &lt;end&gt; should be between 20100101 and 20170823."
     )
 
 
@@ -89,7 +96,8 @@ def stations():
 @app.route("/api/v1.0/tobs")
 def tobs():
     # set up latest date/first date
-    latest_date = dt.date(2017,8,23)
+    last_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()[0]
+    latest_date = str_to_date(last_date)
     first_date = latest_date - dt.timedelta(days=365)
 
     # Query
@@ -109,17 +117,16 @@ def tobs():
 @app.route("/api/v1.0/<start>")
 def tobs_start(start):
 
-    # make the string into a date
-    first_date = dt.date(int(start[0:4]),int(start[4:6]),int(start[6:]))
+    start_date = str_to_date(start)
 
     # mark start/end dates of dataset
-    data_start = dt.date(2010,1,1)
-    data_end = dt.date(2017,8,23)
+    data_start = str_to_date(session.query(Measurement.date).order_by(Measurement.date.asc()).first()[0])
+    data_end = str_to_date(session.query(Measurement.date).order_by(Measurement.date.desc()).first()[0])
 
     # make sure the date is within range
-    if(first_date >= data_start and first_date <= data_end):
+    if(start_date >= data_start and start_date <= data_end):
         temp_agg = session.query(func.min(Measurement.tobs),func.max(Measurement.tobs),func.avg(Measurement.tobs)).\
-            filter(Measurement.date >= first_date)
+            filter(Measurement.date >= start_date)
         
         # save stats
         min_temp = temp_agg[0][0]
@@ -140,12 +147,12 @@ def tobs_start(start):
 def tobs_start_end(start,end):
 
     # make the strings into a date
-    start_date = dt.date(int(start[0:4]),int(start[4:6]),int(start[6:]))
-    end_date = dt.date(int(end[0:4]),int(end[4:6]),int(end[6:]))
+    start_date = str_to_date(start)
+    end_date = str_to_date(end)
 
-    # mark start/end dates of dataset
-    data_start = dt.date(2010,1,1)
-    data_end = dt.date(2017,8,23)
+    data_start = str_to_date(session.query(Measurement.date).order_by(Measurement.date.asc()).first()[0])
+    data_end = str_to_date(session.query(Measurement.date).order_by(Measurement.date.desc()).first()[0])
+
 
     # make sure the dates are within range
     if(start_date >= data_start and start_date <= data_end and end_date >= data_start and end_date <= data_end):
@@ -163,7 +170,7 @@ def tobs_start_end(start,end):
 
         return jsonify(results_dict)
 
-    else: return jsonify({f"error: one of the dates is either in the wrong format, or does not exist in the data's date range.", 404})
+    else: return f"error: one of the dates is either in the wrong format, or does not exist in the data's date range.", 404
 
 
 if __name__ == "__main__":
